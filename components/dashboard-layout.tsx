@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -101,25 +101,48 @@ const branches = [
 ]
 
 export function DashboardLayout({ children, onDateRangeChange, onBranchChange }: DashboardLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false) // Default to false for mobile-first approach
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [selectedBranch, setSelectedBranch] = useState(branches[0])
-  const [isMobile, setIsMobile] = useState(false) // Track mobile state
+  const [isMobile, setIsMobile] = useState(false)
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false)
+  const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
+
+  // Use refs to prevent event propagation issues
+  const branchDropdownRef = useRef<HTMLDivElement>(null)
+  const notificationDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768
       setIsMobile(mobile)
       if (!mobile) {
-        setSidebarOpen(true) // Auto-open on desktop
+        setSidebarOpen(true)
       } else {
-        setSidebarOpen(false) // Auto-close on mobile
+        setSidebarOpen(false)
       }
     }
 
     checkMobile()
     window.addEventListener("resize", checkMobile)
     return () => window.removeEventListener("resize", checkMobile)
+  }, [])
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (branchDropdownRef.current && !branchDropdownRef.current.contains(event.target as Node)) {
+        setBranchDropdownOpen(false)
+      }
+      if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target as Node)) {
+        setNotificationDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
   }, [])
 
   const toggleDarkMode = () => {
@@ -129,6 +152,7 @@ export function DashboardLayout({ children, onDateRangeChange, onBranchChange }:
 
   const handleBranchChange = (branch: (typeof branches)[0]) => {
     setSelectedBranch(branch)
+    setBranchDropdownOpen(false)
     onBranchChange?.(branch.id)
   }
 
@@ -251,82 +275,149 @@ export function DashboardLayout({ children, onDateRangeChange, onBranchChange }:
               <h1 className="text-xl font-semibold text-balance bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Dashboard
               </h1>
-              <p className="text-sm text-muted-foreground">Welcome back to your business overview</p>
+              <p className="text-sm text-muted-foreground">
+                <span className="block lg:hidden">Welcome</span>
+                <span className="hidden lg:block">Welcome back to your business overview</span>
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 bg-background hover:bg-accent min-w-[140px]">
-                  <MapPin className="h-4 w-4" />
-                  <span className="hidden sm:inline">{selectedBranch.name}</span>
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Select Branch</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {branches.map((branch) => (
-                  <DropdownMenuItem
-                    key={branch.id}
-                    onClick={() => handleBranchChange(branch)}
-                    className="flex items-center gap-2"
+            {/* Branch Selection Dropdown */}
+            <div ref={branchDropdownRef}>
+              <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="gap-2 bg-background hover:bg-accent min-w-[140px]"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setBranchDropdownOpen(!branchDropdownOpen)
+                    }}
                   >
                     <MapPin className="h-4 w-4" />
-                    <div className="flex flex-col">
-                      <span className="font-medium">{branch.name}</span>
-                      <span className="text-xs text-muted-foreground">{branch.location}</span>
-                    </div>
-                    {selectedBranch.id === branch.id && <CheckCircle className="h-4 w-4 ml-auto text-green-500" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DatePickerWithRange className="sm:hidden" onDateChange={onDateRangeChange} />
-
-            <DropdownMenu className="sm:hidden">
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="relative hover:bg-accent">
-                  <Bell className="h-4 w-4" />
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs bg-red-500 text-white animate-pulse">
-                    {mockNotifications.length}
-                  </Badge>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel className="flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Notifications
-                  <Badge variant="secondary" className="ml-auto">
-                    {mockNotifications.length}
-                  </Badge>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="max-h-64 overflow-y-auto">
-                  {mockNotifications.map((notification) => (
-                    <DropdownMenuItem key={notification.id} className="flex items-start gap-3 p-3">
-                      <notification.icon
-                        className={cn("h-4 w-4 mt-0.5 flex-shrink-0", getNotificationIcon(notification.type))}
-                      />
-                      <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium leading-none">{notification.title}</p>
-                        <p className="text-xs text-muted-foreground">{notification.message}</p>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {notification.time}
-                        </div>
+                    <span className="hidden sm:inline truncate">{selectedBranch.name}</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent 
+                  align="end" 
+                  className="w-56"
+                  onInteractOutside={(e) => {
+                    // Prevent early closing
+                    e.preventDefault()
+                  }}
+                >
+                  <DropdownMenuLabel>Select Branch</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {branches.map((branch) => (
+                    <DropdownMenuItem
+                      key={branch.id}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleBranchChange(branch)
+                      }}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <MapPin className="h-4 w-4" />
+                      <div className="flex flex-col">
+                        <span className="font-medium">{branch.name}</span>
+                        <span className="text-xs text-muted-foreground">{branch.location}</span>
                       </div>
+                      {selectedBranch.id === branch.id && <CheckCircle className="h-4 w-4 ml-auto text-green-500" />}
                     </DropdownMenuItem>
                   ))}
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-center text-sm text-blue-600 hover:text-blue-700">
-                  View all notifications
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* Date Picker */}
+            <DatePickerWithRange 
+              onDateChange={onDateRangeChange} 
+              className="hidden lg:block" 
+            />
+
+            {/* Notifications Dropdown */}
+            <div ref={notificationDropdownRef}>
+              <DropdownMenu open={notificationDropdownOpen} onOpenChange={setNotificationDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="relative hover:bg-accent"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setNotificationDropdownOpen(!notificationDropdownOpen)
+                    }}
+                  >
+                    <Bell className="h-4 w-4" />
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs bg-red-500 text-white animate-pulse">
+                      {mockNotifications.length}
+                    </Badge>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent 
+                  align="end" 
+                  className="w-80"
+                  onInteractOutside={(e) => {
+                    // Prevent early closing
+                    e.preventDefault()
+                  }}
+                >
+                  <DropdownMenuLabel className="flex items-center gap-2">
+                    <Bell className="h-4 w-4" />
+                    Notifications
+                    <Badge variant="secondary" className="ml-auto">
+                      {mockNotifications.length}
+                    </Badge>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <div className="max-h-64 overflow-y-auto">
+                    {mockNotifications.map((notification) => (
+                      <DropdownMenuItem 
+                        key={notification.id} 
+                        className="flex items-start gap-3 p-3 cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          // Handle notification click
+                          console.log('Notification clicked:', notification.id)
+                        }}
+                      >
+                        <notification.icon
+                          className={cn("h-4 w-4 mt-0.5 flex-shrink-0", getNotificationIcon(notification.type))}
+                        />
+                        <div className="flex-1 space-y-1">
+                          <p className="text-sm font-medium leading-none">{notification.title}</p>
+                          <p className="text-xs text-muted-foreground">{notification.message}</p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            {notification.time}
+                          </div>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="text-center text-sm text-blue-600 hover:text-blue-700 cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setNotificationDropdownOpen(false)
+                      // Navigate to all notifications
+                      console.log('View all notifications')
+                    }}
+                  >
+                    View all notifications
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </header>
 
